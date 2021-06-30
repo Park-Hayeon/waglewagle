@@ -12,6 +12,7 @@ import javax.naming.InitialContext;
 import javax.sql.DataSource;
 
 import DTO.BoardDTO;
+import config.BoardConfig;
 
 public class BoardDAO {
 
@@ -38,7 +39,8 @@ public class BoardDAO {
 				Connection con = this.getConnection();
 				PreparedStatement pstat = con.prepareStatement(sql);
 				ResultSet rs = pstat.executeQuery();
-				){
+			)
+		{
 			List<BoardDTO> list = new ArrayList<>();
 			while(rs.next()) {
 				int board_num = rs.getInt("board_num");
@@ -63,8 +65,8 @@ public class BoardDAO {
 		try(
 				Connection con = this.getConnection();
 				PreparedStatement pstat = con.prepareStatement(sql);
-				){
-			
+			)
+		{	
 			pstat.setNString(1, dto.getTitle());
 			pstat.setNString(2, dto.getContents());
 			pstat.setInt(3, dto.getBoard_num());
@@ -72,9 +74,107 @@ public class BoardDAO {
 			int result = pstat.executeUpdate();
 			
 			con.commit();
-			return result;
-			
+			return result;	
 		}
 	}
 	
+	public int getReportCount (int board_num, int report) throws Exception {
+		String sql="update pboard set report = ? where board_num = ?";
+		try(
+				Connection con = this.getConnection();
+				PreparedStatement pstat = con.prepareStatement(sql);
+			)
+		{
+			pstat.setInt(1, report+1);
+			pstat.setInt(2, board_num);
+			
+			int result = pstat.executeUpdate();
+			con.commit();
+			return result;
+		}
+		
+	}
+	
+	
+	/* board list */
+	private int getRecordCount()throws Exception {
+        String sql = "select count(*) from board";
+        try(Connection con = this.getConnection();
+                PreparedStatement pstat = con.prepareStatement(sql);
+                ResultSet rs = pstat.executeQuery();){    
+
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
+    public List<BoardDTO> getPageList(int startNum,int endNum) throws Exception{
+        String sql ="select * from (select row_number() over(order by seq desc) rnum, board_num, title, id, nickname, write_date, view_count from board) where rnum between ? and ?";
+        try(Connection con = this.getConnection();
+            PreparedStatement pstat = con.prepareStatement(sql);){
+
+            pstat.setInt(1, startNum);
+            pstat.setInt(2, endNum);
+
+            try(ResultSet rs = pstat.executeQuery();){
+                List<BoardDTO> list = new ArrayList<>();
+                while(rs.next()) {
+                    BoardDTO dto = new BoardDTO();
+                    dto.setBoard_num(rs.getInt("board_num"));
+                    dto.setTitle(rs.getNString("title"));
+                    dto.setId(rs.getNString("id"));
+                    dto.setNickname(rs.getNString("nickname"));
+                    dto.setWrite_date(rs.getDate("write_date"));
+                    dto.setView_count(rs.getInt("view_count"));
+
+                    list.add(dto);
+                }
+                return list;
+
+            }
+
+        }
+    }
+
+    public List<String> getPageNavi(int currentPage)throws Exception{
+        int recordTotalCount = this.getRecordCount();
+        int recordCountPerPage = BoardConfig.RECORD_COUNT_PER_PAGE;
+        int naviCountPerPage = BoardConfig.NAVI_COUNT_PER_PAGE;
+
+        int pageTotalCount = 0; 
+        if(recordTotalCount % recordCountPerPage > 0) {
+            pageTotalCount = recordTotalCount / recordCountPerPage + 1;
+        }else {
+            pageTotalCount = recordTotalCount / recordCountPerPage;
+        }
+
+        if(currentPage > pageTotalCount) {
+            currentPage = pageTotalCount;
+        }else if(currentPage < 1) {
+            currentPage = 1;
+        }
+
+        int startNavi = (currentPage-1) / naviCountPerPage * naviCountPerPage + 1;
+        int endNavi = startNavi + (naviCountPerPage - 1);
+
+        if(endNavi>pageTotalCount) {endNavi = pageTotalCount;}
+
+        boolean needPrev = true;
+        boolean needNext = true;
+
+        if(startNavi == 1) {needPrev = false;}
+        if(endNavi == pageTotalCount) {needNext = false;}
+
+        List<String> pageNavi = new ArrayList<>();
+
+        if(needPrev) {pageNavi.add("<");}
+
+        for(int i = startNavi; i <= endNavi; i++) {
+            pageNavi.add(String.valueOf(i));
+        }
+
+        if(needNext) {pageNavi.add(">");}
+
+        return pageNavi;
+    }
 }
